@@ -46,7 +46,7 @@ Catégorie : ${form.categorie}
 Caractéristiques clés : ${form.caracteristiques}
 Cible : ${form.cible || "Grand public"}
 
-Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour :
+Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour, sans markdown :
 {
   "variantes": [
     {
@@ -56,30 +56,57 @@ Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour :
       "points_forts": ["...", "...", "..."],
       "appel_action": "..."
     },
-    { ... },
-    { ... }
+    { "titre": "...", "accroche": "...", "description": "...", "points_forts": ["...", "...", "..."], "appel_action": "..." },
+    { "titre": "...", "accroche": "...", "description": "...", "points_forts": ["...", "...", "..."], "appel_action": "..." }
   ]
 }`;
 
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+      if (!apiKey) {
+        setError("Clé API Gemini manquante. Vérifie ta variable VITE_GEMINI_API_KEY dans Vercel.");
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-    }),
-  }
-);
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.8,
+              maxOutputTokens: 1500,
+            },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errData = await res.json();
+        console.error("Gemini API error:", errData);
+        setError(`Erreur API (${res.status}). Vérifie ta clé Gemini.`);
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const clean = text.replace(/```json|```/g, "").trim();
+
+      // Nettoyage robuste du JSON
+      const clean = text
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+
       const parsed = JSON.parse(clean);
       setResult(parsed.variantes);
     } catch (e) {
-      setError("Erreur lors de la génération. Réessaie !");
+      console.error("Parsing error:", e);
+      setError("Erreur lors de la génération. Vérifie ta clé API et réessaie.");
     } finally {
       setLoading(false);
     }
@@ -182,7 +209,7 @@ Réponds UNIQUEMENT en JSON valide, sans backticks ni texte autour :
               ))}
             </div>
 
-            {error && <p style={styles.error}>{error}</p>}
+            {error && <p style={styles.error}>⚠ {error}</p>}
 
             <button
               style={{ ...styles.btn, ...(loading ? styles.btnLoading : {}) }}
@@ -285,21 +312,9 @@ const styles = {
     padding: "20px 40px",
     borderBottom: "1px solid #1e1e1e",
   },
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-  },
-  logoIcon: {
-    fontSize: "22px",
-    color: "#c9a84c",
-  },
-  logoText: {
-    fontSize: "18px",
-    fontWeight: "700",
-    letterSpacing: "0.05em",
-    color: "#f0ede8",
-  },
+  logo: { display: "flex", alignItems: "center", gap: "10px" },
+  logoIcon: { fontSize: "22px", color: "#c9a84c" },
+  logoText: { fontSize: "18px", fontWeight: "700", letterSpacing: "0.05em", color: "#f0ede8" },
   badge: {
     fontSize: "11px",
     fontFamily: "'Courier New', monospace",
@@ -310,11 +325,7 @@ const styles = {
     padding: "4px 10px",
     borderRadius: "20px",
   },
-  main: {
-    display: "flex",
-    flex: 1,
-    gap: "0",
-  },
+  main: { display: "flex", flex: 1 },
   panel: {
     width: "420px",
     minWidth: "380px",
@@ -323,259 +334,41 @@ const styles = {
     display: "flex",
     flexDirection: "column",
   },
-  headline: {
-    fontSize: "32px",
-    fontWeight: "700",
-    lineHeight: "1.2",
-    margin: "0 0 12px",
-    color: "#f0ede8",
-  },
-  accent: {
-    color: "#c9a84c",
-    fontStyle: "italic",
-  },
-  sub: {
-    fontSize: "14px",
-    color: "#888",
-    margin: "0 0 32px",
-    lineHeight: "1.6",
-    fontFamily: "'Courier New', monospace",
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-  },
-  label: {
-    fontSize: "11px",
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    color: "#888",
-    fontFamily: "'Courier New', monospace",
-    marginBottom: "-8px",
-  },
-  input: {
-    background: "#111",
-    border: "1px solid #222",
-    borderRadius: "8px",
-    padding: "12px 14px",
-    color: "#f0ede8",
-    fontSize: "14px",
-    fontFamily: "'Georgia', serif",
-    outline: "none",
-    transition: "border-color 0.2s",
-  },
-  textarea: {
-    background: "#111",
-    border: "1px solid #222",
-    borderRadius: "8px",
-    padding: "12px 14px",
-    color: "#f0ede8",
-    fontSize: "14px",
-    fontFamily: "'Georgia', serif",
-    outline: "none",
-    resize: "vertical",
-    transition: "border-color 0.2s",
-  },
-  chips: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-  },
-  chip: {
-    padding: "6px 14px",
-    borderRadius: "20px",
-    border: "1px solid #222",
-    background: "transparent",
-    color: "#888",
-    fontSize: "12px",
-    cursor: "pointer",
-    fontFamily: "'Courier New', monospace",
-    transition: "all 0.2s",
-  },
-  chipActive: {
-    background: "#c9a84c22",
-    border: "1px solid #c9a84c",
-    color: "#c9a84c",
-  },
-  tones: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "8px",
-  },
-  toneBtn: {
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid #222",
-    background: "#111",
-    color: "#888",
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "all 0.2s",
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-  },
-  toneBtnActive: {
-    border: "1px solid #c9a84c",
-    background: "#c9a84c11",
-    color: "#f0ede8",
-  },
-  toneLabel: {
-    fontSize: "13px",
-    fontWeight: "600",
-    fontFamily: "'Georgia', serif",
-  },
-  toneDesc: {
-    fontSize: "10px",
-    fontFamily: "'Courier New', monospace",
-    letterSpacing: "0.05em",
-    opacity: 0.7,
-  },
-  error: {
-    color: "#e05555",
-    fontSize: "13px",
-    fontFamily: "'Courier New', monospace",
-    margin: 0,
-  },
-  btn: {
-    marginTop: "8px",
-    padding: "16px",
-    background: "#c9a84c",
-    color: "#0a0a0a",
-    border: "none",
-    borderRadius: "8px",
-    fontSize: "15px",
-    fontWeight: "700",
-    fontFamily: "'Georgia', serif",
-    cursor: "pointer",
-    letterSpacing: "0.03em",
-    transition: "all 0.2s",
-  },
-  btnLoading: {
-    opacity: 0.7,
-    cursor: "not-allowed",
-  },
-  spinner: {
-    fontFamily: "'Courier New', monospace",
-    letterSpacing: "0.05em",
-  },
-  results: {
-    flex: 1,
-    padding: "40px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "24px",
-    overflowY: "auto",
-  },
-  empty: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "16px",
-    opacity: 0.4,
-  },
-  emptyIcon: {
-    fontSize: "48px",
-    color: "#c9a84c",
-  },
-  emptyText: {
-    textAlign: "center",
-    fontSize: "15px",
-    lineHeight: "1.7",
-    fontFamily: "'Courier New', monospace",
-    color: "#888",
-  },
-  card: {
-    background: "#111",
-    border: "1px solid #1e1e1e",
-    borderRadius: "12px",
-    padding: "28px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    transition: "border-color 0.2s",
-  },
-  cardHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  varLabel: {
-    fontSize: "10px",
-    letterSpacing: "0.15em",
-    textTransform: "uppercase",
-    color: "#c9a84c",
-    fontFamily: "'Courier New', monospace",
-  },
-  copyBtn: {
-    padding: "5px 14px",
-    background: "transparent",
-    border: "1px solid #333",
-    borderRadius: "20px",
-    color: "#888",
-    fontSize: "12px",
-    cursor: "pointer",
-    fontFamily: "'Courier New', monospace",
-    transition: "all 0.2s",
-  },
-  copyBtnDone: {
-    border: "1px solid #4caf78",
-    color: "#4caf78",
-  },
-  cardTitle: {
-    fontSize: "18px",
-    fontWeight: "700",
-    color: "#f0ede8",
-    margin: 0,
-    lineHeight: "1.3",
-  },
-  accroche: {
-    fontSize: "15px",
-    color: "#c9a84c",
-    fontStyle: "italic",
-    margin: 0,
-    lineHeight: "1.5",
-  },
-  desc: {
-    fontSize: "14px",
-    color: "#aaa",
-    margin: 0,
-    lineHeight: "1.7",
-  },
-  points: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  point: {
-    fontSize: "13px",
-    color: "#ccc",
-    display: "flex",
-    gap: "8px",
-    lineHeight: "1.5",
-    fontFamily: "'Courier New', monospace",
-  },
-  check: {
-    color: "#4caf78",
-    fontWeight: "bold",
-  },
-  cta: {
-    marginTop: "4px",
-    padding: "12px 16px",
-    background: "#c9a84c18",
-    border: "1px solid #c9a84c44",
-    borderRadius: "8px",
-    fontSize: "13px",
-    color: "#c9a84c",
-    fontFamily: "'Courier New', monospace",
-    letterSpacing: "0.03em",
-  },
+  headline: { fontSize: "32px", fontWeight: "700", lineHeight: "1.2", margin: "0 0 12px", color: "#f0ede8" },
+  accent: { color: "#c9a84c", fontStyle: "italic" },
+  sub: { fontSize: "14px", color: "#888", margin: "0 0 32px", lineHeight: "1.6", fontFamily: "'Courier New', monospace" },
+  form: { display: "flex", flexDirection: "column", gap: "14px" },
+  label: { fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#888", fontFamily: "'Courier New', monospace", marginBottom: "-8px" },
+  input: { background: "#111", border: "1px solid #222", borderRadius: "8px", padding: "12px 14px", color: "#f0ede8", fontSize: "14px", fontFamily: "'Georgia', serif", outline: "none" },
+  textarea: { background: "#111", border: "1px solid #222", borderRadius: "8px", padding: "12px 14px", color: "#f0ede8", fontSize: "14px", fontFamily: "'Georgia', serif", outline: "none", resize: "vertical" },
+  chips: { display: "flex", flexWrap: "wrap", gap: "8px" },
+  chip: { padding: "6px 14px", borderRadius: "20px", border: "1px solid #222", background: "transparent", color: "#888", fontSize: "12px", cursor: "pointer", fontFamily: "'Courier New', monospace", transition: "all 0.2s" },
+  chipActive: { background: "#c9a84c22", border: "1px solid #c9a84c", color: "#c9a84c" },
+  tones: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" },
+  toneBtn: { padding: "10px 12px", borderRadius: "8px", border: "1px solid #222", background: "#111", color: "#888", cursor: "pointer", textAlign: "left", transition: "all 0.2s", display: "flex", flexDirection: "column", gap: "2px" },
+  toneBtnActive: { border: "1px solid #c9a84c", background: "#c9a84c11", color: "#f0ede8" },
+  toneLabel: { fontSize: "13px", fontWeight: "600", fontFamily: "'Georgia', serif" },
+  toneDesc: { fontSize: "10px", fontFamily: "'Courier New', monospace", letterSpacing: "0.05em", opacity: 0.7 },
+  error: { color: "#e07755", fontSize: "13px", fontFamily: "'Courier New', monospace", margin: 0, lineHeight: "1.5", background: "#e0775511", padding: "10px 14px", borderRadius: "8px", border: "1px solid #e0775533" },
+  btn: { marginTop: "8px", padding: "16px", background: "#c9a84c", color: "#0a0a0a", border: "none", borderRadius: "8px", fontSize: "15px", fontWeight: "700", fontFamily: "'Georgia', serif", cursor: "pointer", letterSpacing: "0.03em", transition: "all 0.2s" },
+  btnLoading: { opacity: 0.7, cursor: "not-allowed" },
+  spinner: { fontFamily: "'Courier New', monospace", letterSpacing: "0.05em" },
+  results: { flex: 1, padding: "40px", display: "flex", flexDirection: "column", gap: "24px", overflowY: "auto" },
+  empty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", opacity: 0.4 },
+  emptyIcon: { fontSize: "48px", color: "#c9a84c" },
+  emptyText: { textAlign: "center", fontSize: "15px", lineHeight: "1.7", fontFamily: "'Courier New', monospace", color: "#888" },
+  card: { background: "#111", border: "1px solid #1e1e1e", borderRadius: "12px", padding: "28px", display: "flex", flexDirection: "column", gap: "12px" },
+  cardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  varLabel: { fontSize: "10px", letterSpacing: "0.15em", textTransform: "uppercase", color: "#c9a84c", fontFamily: "'Courier New', monospace" },
+  copyBtn: { padding: "5px 14px", background: "transparent", border: "1px solid #333", borderRadius: "20px", color: "#888", fontSize: "12px", cursor: "pointer", fontFamily: "'Courier New', monospace", transition: "all 0.2s" },
+  copyBtnDone: { border: "1px solid #4caf78", color: "#4caf78" },
+  cardTitle: { fontSize: "18px", fontWeight: "700", color: "#f0ede8", margin: 0, lineHeight: "1.3" },
+  accroche: { fontSize: "15px", color: "#c9a84c", fontStyle: "italic", margin: 0, lineHeight: "1.5" },
+  desc: { fontSize: "14px", color: "#aaa", margin: 0, lineHeight: "1.7" },
+  points: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" },
+  point: { fontSize: "13px", color: "#ccc", display: "flex", gap: "8px", lineHeight: "1.5", fontFamily: "'Courier New', monospace" },
+  check: { color: "#4caf78", fontWeight: "bold" },
+  cta: { marginTop: "4px", padding: "12px 16px", background: "#c9a84c18", border: "1px solid #c9a84c44", borderRadius: "8px", fontSize: "13px", color: "#c9a84c", fontFamily: "'Courier New', monospace", letterSpacing: "0.03em" },
 };
 
 const css = `
